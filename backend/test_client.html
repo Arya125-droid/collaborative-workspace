@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Collaboration Cursors</title>
+    <style>
+        body { 
+            margin: 0; overflow: hidden; background: #1e1e1e; color: white;
+            font-family: sans-serif; height: 100vh; width: 100vw;
+        }
+        #info {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px;
+        }
+        .cursor {
+            position: absolute;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            pointer-events: none;
+            transition: top 0.05s linear, left 0.05s linear; /* Smooths out network jumps */
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>Shared Document: <span id="docIdDisplay"></span></h3>
+        <p>Your User ID: <span id="userIdDisplay"></span></p>
+        <p style="color: #4ade80">Move your mouse around!</p>
+    </div>
+
+    <script>
+        // Generate a random user ID for testing
+        const myUserId = 'user_' + Math.floor(Math.random() * 10000);
+        const docId = 'report_v1';
+        
+        document.getElementById('docIdDisplay').innerText = docId;
+        document.getElementById('userIdDisplay').innerText = myUserId;
+
+        // Connect to our Node.js WebSocket Engine
+        const ws = new WebSocket(`ws://localhost:3001/?docId=${docId}&userId=${myUserId}`);
+        const cursors = {}; // Store remote cursor DOM elements
+
+        ws.onopen = () => console.log("Connected to Collaboration Hub!");
+
+        // Handle incoming messages from Redis (via Node.js)
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            // Don't process our own echoed messages
+            if (data.userId === myUserId) return;
+
+            if (data.type === 'cursor_move') {
+                updateRemoteCursor(data.userId, data.payload.x, data.payload.y);
+            } else if (data.type === 'user_left') {
+                removeRemoteCursor(data.userId);
+            }
+        };
+
+        // Capture local mouse movements and send to server
+        // (Throttled slightly so we don't crash the browser sending 1000 events a second)
+        let lastSend = 0;
+        document.addEventListener('mousemove', (e) => {
+            const now = Date.now();
+            if (now - lastSend > 30) { // Send roughly 30 times a second
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'cursor_move',
+                        payload: { x: e.clientX, y: e.clientY }
+                    }));
+                }
+                lastSend = now;
+            }
+        });
+
+        // --- DOM Helpers for Remote Cursors ---
+        function updateRemoteCursor(userId, x, y) {
+            if (!cursors[userId]) {
+                // Create a new cursor element if it doesn't exist
+                const el = document.createElement('div');
+                el.className = 'cursor';
+                // Generate a random color based on userId
+                const hue = userId.replace(/\D/g, '') % 360; 
+                el.style.backgroundColor = `hsl(${hue}, 80%, 50%)`;
+                el.innerText = userId.slice(-4);
+                document.body.appendChild(el);
+                cursors[userId] = el;
+            }
+            // Move it
+            cursors[userId].style.left = `${x}px`;
+            cursors[userId].style.top = `${y}px`;
+        }
+
+        function removeRemoteCursor(userId) {
+            if (cursors[userId]) {
+                cursors[userId].remove();
+                delete cursors[userId];
+            }
+        }
+    </script>
+</body>
+</html>
