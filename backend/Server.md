@@ -9,7 +9,7 @@ Authorization: <scheme> <credentials>
 
 A typical header looks like:
 ```Text
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+Authorization: Bearer example123hell0.World
 ```
 
 ## Why "Bearer"?
