@@ -83,7 +83,7 @@ wss.on('connection', (ws, req) => {
                 return;
             }
 
-            if (data.type === 'cursor-move') {
+            if (data.type === 'cursor-move' || data.type === 'block-update') {
                 pubClient.publish(`doc:${docId}:updates`, JSON.stringify({
                     type: data.type,
                     userId: userId,
@@ -96,6 +96,8 @@ wss.on('connection', (ws, req) => {
     });
 
     ws.on('close', async () => {
+        clearTimeout(authTimeout);
+
         if(isAuthenticated && userId){
             console.log(`User ${userId} left Doc ${docId}`);
             localClient.delete(ws);
